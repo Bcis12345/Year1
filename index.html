@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Word Search Game</title>
+  <style>
+    body {
+      background: linear-gradient(to right, #fceabb, #f8b500);
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      text-align: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    h1 {
+      color: #444;
+      font-weight: bold;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(12, 40px);
+      gap: 2px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .cell {
+      width: 40px;
+      height: 40px;
+      background: #fff;
+      border: 1px solid #ccc;
+      font-size: 18px;
+      font-weight: bold;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .selected {
+      background: orange;
+      color: #fff;
+    }
+
+    .found {
+      background: lightgreen;
+      color: #000;
+    }
+
+    #wordList {
+      margin-top: 20px;
+      font-size: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      font-weight: bold;
+    }
+
+    .done {
+      text-decoration: line-through;
+      color: gray;
+    }
+
+    /* Flying letter styles */
+    .flying-letter {
+      position: absolute;
+      font-size: 24px;
+      font-weight: bold;
+      animation: fly 2s ease-out forwards;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    @keyframes fly {
+      0% {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translate(var(--dx), var(--dy)) scale(2);
+      }
+    }
+  </style>
+</head>
+<body>
+
+<h1>🧩 Word Search Game 🧩</h1>
+<div id="grid"></div>
+<div id="wordList"></div>
+
+<script>
+  const words = ["Alana", "Nicole", "Eddie", "Aaron", "Jayden", "Ai", "Noma", "Yoogeun", "Halle", "Aliz", "Eric", "Chloe", "Xender", "Wadi", "Mango", "Leo"];
+  const gridSize = 12;
+  const grid = Array.from({ length: gridSize }, () => Array(gridSize).fill(""));
+
+  function canPlaceWord(word, row, col, direction) {
+    const len = word.length;
+
+    if (direction === "horizontal") {
+      if (col + len > gridSize) return false;
+      for (let i = 0; i < len; i++) {
+        if (grid[row][col + i] !== "" && grid[row][col + i] !== word[i]) {
+          return false;
+        }
+      }
+    } else if (direction === "vertical") {
+      if (row + len > gridSize) return false;
+      for (let i = 0; i < len; i++) {
+        if (grid[row + i][col] !== "" && grid[row + i][col] !== word[i]) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function placeWord(word, row, col, direction) {
+    const len = word.length;
+    if (direction === "horizontal") {
+      for (let i = 0; i < len; i++) {
+        grid[row][col + i] = word[i];
+      }
+    } else if (direction === "vertical") {
+      for (let i = 0; i < len; i++) {
+        grid[row + i][col] = word[i];
+      }
+    }
+  }
+
+  function placeAllWords() {
+    const sortedWords = [...words].sort((a, b) => b.length - a.length);
+
+    sortedWords.forEach(word => {
+      const upperWord = word.toUpperCase();
+      let placed = false;
+      let attempts = 0;
+      const maxAttempts = 100;
+
+      while (!placed && attempts < maxAttempts) {
+        const direction = Math.random() < 0.5 ? "horizontal" : "vertical";
+        let row, col;
+
+        if (direction === "horizontal") {
+          row = Math.floor(Math.random() * gridSize);
+          col = Math.floor(Math.random() * (gridSize - upperWord.length + 1));
+        } else { // vertical
+          row = Math.floor(Math.random() * (gridSize - upperWord.length + 1));
+          col = Math.floor(Math.random() * gridSize);
+        }
+
+        if (canPlaceWord(upperWord, row, col, direction)) {
+          placeWord(upperWord, row, col, direction);
+          placed = true;
+        }
+        attempts++;
+      }
+      if (!placed) {
+        console.warn(`Could not place word: ${word}`);
+      }
+    });
+  }
+
+  function fillRandomLetters() {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (let r = 0; r < gridSize; r++) {
+      for (let c = 0; c < gridSize; c++) {
+        if (grid[r][c] === "") {
+          grid[r][c] = letters[Math.floor(Math.random() * letters.length)];
+        }
+      }
+    }
+  }
+
+  let selectedCells = [];
+  let foundWords = [];
+
+  function renderGrid() {
+    const gridContainer = document.getElementById("grid");
+    gridContainer.innerHTML = "";
+    for (let r = 0; r < gridSize; r++) {
+      for (let c = 0; c < gridSize; c++) {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.textContent = grid[r][c];
+        cell.dataset.row = r;
+        cell.dataset.col = c;
+        cell.addEventListener("click", () => handleClick(cell));
+        gridContainer.appendChild(cell);
+      }
+    }
+    updateWordList();
+  }
+
+  // --- MODIFIED handleClick FUNCTION ---
+  function handleClick(cell) {
+    // If the cell is already part of a found word, we should still allow it to be selected
+    // but we don't want to remove its "found" class by just clicking it.
+    // The key is that it *can* be part of a new selection.
+
+    const isCurrentlySelected = selectedCells.includes(cell);
+
+    if (isCurrentlySelected) {
+      // If clicked again, remove it from selection and its 'selected' class
+      cell.classList.remove("selected");
+      selectedCells = selectedCells.filter(c => c !== cell);
+    } else {
+      // If it's not currently selected, add it.
+      // Check if the cell is already part of a found word.
+      // If it is, we still add it to selectedCells, but we don't remove 'found'.
+      if (!cell.classList.contains("found")) {
+         cell.classList.add("selected");
+      } else {
+         // If it's a found cell, just add it to selectedCells without adding 'selected' class
+         // This ensures it's part of the sequence for checking, but keeps its 'found' look
+      }
+      selectedCells.push(cell);
+    }
+
+    // Always re-sort selected cells to ensure consistency for word checking
+    selectedCells.sort((a, b) => {
+        const rowA = parseInt(a.dataset.row);
+        const colA = parseInt(a.dataset.col);
+        const rowB = parseInt(b.dataset.row);
+        const colB = parseInt(b.dataset.col);
+        if (rowA !== rowB) return rowA - rowB;
+        return colA - colB;
+    });
+
+    const currentWord = selectedCells.map(c => c.textContent).join('');
+    const reversedCurrentWord = currentWord.split('').reverse().join('');
+
+    // Find if the current selection matches any word (or its reverse) that hasn't been found yet
+    const potentialMatch = words.find(w =>
+        (w.toUpperCase() === currentWord || w.toUpperCase() === reversedCurrentWord) &&
+        !foundWords.includes(w) // Ensure it's not already found
+    );
+
+    // If a potential match is found AND the cells form a straight line
+    if (potentialMatch && areCellsInStraightLine(selectedCells)) {
+        selectedCells.forEach(c => {
+            c.classList.remove("selected"); // Remove selected class if any
+            c.classList.add("found");      // Add found class
+        });
+
+        launchFlyingLetters(selectedCells); // 🎉 fly effect
+
+        foundWords.push(potentialMatch); // Add the actual word (case-sensitive) to found list
+        selectedCells = []; // Reset selection
+
+        updateWordList();
+
+        if (foundWords.length === words.length) {
+            setTimeout(() => alert("🎉 You found all the words! 🎉"), 100);
+        }
+    }
+    // If the selected cells form a sequence that is not a word or not a straight line,
+    // or if the length of selected cells exceeds the longest word in the list,
+    // consider clearing the selection. This prevents very long random selections.
+    const longestWordLength = Math.max(...words.map(w => w.length));
+    if (selectedCells.length > 1 &&
+        (selectedCells.length > longestWordLength || !areCellsInStraightLine(selectedCells))) {
+        selectedCells.forEach(c => c.classList.remove("selected"));
+        selectedCells = [];
+    }
+  }
+  // --- END MODIFIED handleClick FUNCTION ---
+
+
+  function updateWordList() {
+    const list = document.getElementById("wordList");
+    list.innerHTML = "";
+    words.forEach(word => {
+      const span = document.createElement("span");
+      span.textContent = word;
+      if (foundWords.includes(word)) span.classList.add("done");
+      list.appendChild(span);
+    });
+  }
+
+  function launchFlyingLetters(cells) {
+    cells.forEach(cell => {
+      const letter = cell.textContent;
+      const flying = document.createElement("div");
+      flying.className = "flying-letter";
+      flying.textContent = letter;
+
+      const rect = cell.getBoundingClientRect();
+      flying.style.left = rect.left + "px";
+      flying.style.top = rect.top + "px";
+
+      const dx = Math.random() * 400 - 200;
+      const dy = Math.random() * 300 - 150;
+      flying.style.setProperty('--dx', `${dx}px`);
+      flying.style.setProperty('--dy', `${dy}px`);
+
+      document.body.appendChild(flying);
+
+      setTimeout(() => flying.remove(), 2000);
+    });
+  }
+
+  function areCellsInStraightLine(cells) {
+    if (cells.length < 2) return true;
+
+    const firstRow = parseInt(cells[0].dataset.row);
+    const firstCol = parseInt(cells[0].dataset.col);
+
+    // Determine direction based on the first two cells (if available)
+    let rowDiff = 0;
+    let colDiff = 0;
+
+    if (cells.length > 1) {
+        const secondRow = parseInt(cells[1].dataset.row);
+        const secondCol = parseInt(cells[1].dataset.col);
+        rowDiff = secondRow - firstRow;
+        colDiff = secondCol - firstCol;
+
+        // Ensure movement is exactly one step for straight lines
+        if (Math.abs(rowDiff) > 1 || Math.abs(colDiff) > 1) return false;
+        // Disallow non-straight moves (e.g., L-shape)
+        if (rowDiff !== 0 && colDiff !== 0 && Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
+    }
+
+
+    // Validate the rest of the cells based on the determined direction
+    for (let i = 1; i < cells.length; i++) {
+        const currentRow = parseInt(cells[i].dataset.row);
+        const currentCol = parseInt(cells[i].dataset.col);
+        const prevRow = parseInt(cells[i-1].dataset.row);
+        const prevCol = parseInt(cells[i-1].dataset.col);
+
+        // Check for consecutiveness
+        if (currentRow === prevRow + rowDiff && currentCol === prevCol + colDiff) {
+            continue;
+        } else {
+            return false;
+        }
+    }
+    return true;
+  }
+
+  // Initialize the game
+  placeAllWords();
+  fillRandomLetters();
+  renderGrid();
+</script>
+
+</body>
+</html>
